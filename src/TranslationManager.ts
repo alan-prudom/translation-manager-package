@@ -306,7 +306,7 @@ namespace Shared.TranslationManager {
                                        class="inline-flex items-center px-2 py-1 rounded text-xs font-medium ${link.isTrusted ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'bg-red-50 text-red-700 hover:bg-red-100'} transition-colors border ${link.isTrusted ? 'border-blue-100' : 'border-red-100'}"
                                        title="${link.isTrusted ? 'Verified Link' : 'Untrusted Domain'}">
                                         <span class="mr-1">${link.isTrusted ? '🔗' : '⚠️'}</span>
-                                        ${this.config.sanitizer ? this.config.sanitizer(link.label) : link.label}
+                                        ${this.config?.sanitizer ? this.config.sanitizer(link.label) : link.label}
                                     </a>
                                 `).join(' ');
                             }
