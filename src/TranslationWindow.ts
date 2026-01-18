@@ -43,3 +43,8 @@ namespace Shared.TranslationManager {
         }
     }
 }
+
+// Enable Unit Testing in Node environment
+if (typeof module !== 'undefined') {
+    module.exports = Shared.TranslationManager.TranslationWindow;
+}

@@ -55,20 +55,22 @@ namespace Shared.TranslationManager {
             if (!config.gasTranslationFunction) {
                 throw new Error('[TranslationManager] config.gasTranslationFunction is required');
             }
-            if (!config.selectors) {
-                throw new Error('[TranslationManager] config.selectors is required');
-            }
-            if (!config.selectors.container) {
-                throw new Error('[TranslationManager] config.selectors.container is required');
-            }
-            if (!config.selectors.container.includes('{id}')) {
-                throw new Error('[TranslationManager] config.selectors.container must include {id} placeholder');
-            }
-            if (!config.selectors.title) {
-                throw new Error('[TranslationManager] config.selectors.title is required');
-            }
-            if (!config.selectors.description) {
-                throw new Error('[TranslationManager] config.selectors.description is required');
+            if (config.selectors) {
+                if (!config.selectors.container) {
+                    throw new Error('[TranslationManager] config.selectors.container is required if selectors provided');
+                }
+                if (config.selectors.container.indexOf('{id}') === -1) {
+                    throw new Error('[TranslationManager] config.selectors.container must include {id} placeholder');
+                }
+                if (!config.selectors.title) {
+                    throw new Error('[TranslationManager] config.selectors.title is required if selectors provided');
+                }
+                if (!config.selectors.description) {
+                    throw new Error('[TranslationManager] config.selectors.description is required if selectors provided');
+                }
+            } else if (!config.onTranslationComplete) {
+                // If no selectors, we MUST have a callback to deliver results
+                throw new Error('[TranslationManager] config.onTranslationComplete is required when using headless mode (no selectors)');
             }
 
             // Validate batch sizes if provided
@@ -172,16 +174,18 @@ namespace Shared.TranslationManager {
                     entry.isTranslated = false;
 
                     // Update UI directly if elements exist
-                    const containerSelector = this.config!.selectors.container.replace('{id}', entry.id);
-                    const entryEl = document.querySelector(containerSelector);
-                    if (entryEl) {
-                        const titleEl = entryEl.querySelector(this.config!.selectors.title);
-                        if (titleEl && this.config!.translatedClasses?.title) {
-                            this.config!.translatedClasses.title.forEach(cls => titleEl.classList.remove(cls));
-                        }
-                        const descEl = entryEl.querySelector(this.config!.selectors.description);
-                        if (descEl && this.config!.translatedClasses?.description) {
-                            this.config!.translatedClasses.description.forEach(cls => descEl.classList.remove(cls));
+                    if (this.config!.selectors) {
+                        const containerSelector = this.config!.selectors.container.replace('{id}', entry.id);
+                        const entryEl = document.querySelector(containerSelector);
+                        if (entryEl) {
+                            const titleEl = entryEl.querySelector(this.config!.selectors.title);
+                            if (titleEl && this.config!.translatedClasses?.title) {
+                                this.config!.translatedClasses.title.forEach(cls => titleEl.classList.remove(cls));
+                            }
+                            const descEl = entryEl.querySelector(this.config!.selectors.description);
+                            if (descEl && this.config!.translatedClasses?.description) {
+                                this.config!.translatedClasses.description.forEach(cls => descEl.classList.remove(cls));
+                            }
                         }
                     }
                 }
@@ -195,7 +199,7 @@ namespace Shared.TranslationManager {
          * @returns True if element is viewable
          */
         public isElementViewable(id: string): boolean {
-            if (!this.config) return false;
+            if (!this.config || !this.config.selectors) return false;
 
             const containerSelector = this.config.selectors.container.replace('{id}', id);
             const el = document.querySelector(containerSelector);
@@ -255,63 +259,66 @@ namespace Shared.TranslationManager {
                     }
                 }
 
-                // Update DOM
-                const containerSelector = this.config.selectors.container.replace('{id}', id);
-                const entryEl = document.querySelector(containerSelector);
-                if (!entryEl) return;
+                // Update DOM (Only if selectors provided)
+                if (this.config.selectors) {
+                    const containerSelector = this.config.selectors.container.replace('{id}', id);
+                    const entryEl = document.querySelector(containerSelector);
+                    if (entryEl) {
+                        // Translate title
+                        if (translationResult.title) {
+                            const titleEl = entryEl.querySelector(this.config.selectors.title);
+                            if (titleEl) {
+                                const sanitizedTitle = this.config.sanitizer
+                                    ? this.config.sanitizer(translationResult.title)
+                                    : translationResult.title;
+                                titleEl.innerHTML = sanitizedTitle;
 
-                // Translate title
-                if (translationResult.title) {
-                    const titleEl = entryEl.querySelector(this.config.selectors.title);
-                    if (titleEl) {
-                        const sanitizedTitle = this.config.sanitizer
-                            ? this.config.sanitizer(translationResult.title)
-                            : translationResult.title;
-                        titleEl.innerHTML = sanitizedTitle;
+                                // Add translated classes
+                                const titleClasses = this.config.translatedClasses?.title || ['text-indigo-800'];
+                                titleClasses.forEach(cls => titleEl.classList.add(cls));
+                            }
+                        }
 
-                        // Add translated classes
-                        const titleClasses = this.config.translatedClasses?.title || ['text-indigo-800'];
-                        titleClasses.forEach(cls => titleEl.classList.add(cls));
-                    }
-                }
+                        // Translate description
+                        if (translationResult.description) {
+                            const descEl = entryEl.querySelector(this.config.selectors.description);
+                            if (descEl) {
+                                const sanitizedDesc = this.config.sanitizer
+                                    ? this.config.sanitizer(translationResult.description)
+                                    : translationResult.description;
+                                descEl.innerHTML = sanitizedDesc;
 
-                // Translate description
-                if (translationResult.description) {
-                    const descEl = entryEl.querySelector(this.config.selectors.description);
-                    if (descEl) {
-                        const sanitizedDesc = this.config.sanitizer
-                            ? this.config.sanitizer(translationResult.description)
-                            : translationResult.description;
-                        descEl.innerHTML = sanitizedDesc;
+                                // Add translated classes
+                                const descClasses = this.config.translatedClasses?.description || ['text-indigo-600', 'font-medium'];
+                                descClasses.forEach(cls => descEl.classList.add(cls));
 
-                        // Add translated classes
-                        const descClasses = this.config.translatedClasses?.description || ['text-indigo-600', 'font-medium'];
-                        descClasses.forEach(cls => descEl.classList.add(cls));
+                                // Extract URLs if extractor provided
+                                if (this.config.urlExtractor && this.config.trustedDomains) {
+                                    const extractedUrls = this.config.urlExtractor(
+                                        translationResult.description,
+                                        this.config.trustedDomains
+                                    );
 
-                        // Extract URLs if extractor provided
-                        if (this.config.urlExtractor && this.config.trustedDomains) {
-                            const extractedUrls = this.config.urlExtractor(
-                                translationResult.description,
-                                this.config.trustedDomains
-                            );
-
-                            if (extractedUrls.length > 0) {
-                                let urlsEl = entryEl.querySelector('.entry-urls') as HTMLElement;
-                                if (!urlsEl) {
-                                    urlsEl = document.createElement('div');
-                                    urlsEl.className = 'entry-urls flex flex-wrap gap-2 mt-2';
-                                    descEl.parentElement?.appendChild(urlsEl);
+                                    if (extractedUrls.length > 0) {
+                                        let urlsEl = entryEl.querySelector('.entry-urls') as HTMLElement;
+                                        if (!urlsEl) {
+                                            urlsEl = document.createElement('div');
+                                            urlsEl.className = 'entry-urls flex flex-wrap gap-2 mt-2';
+                                            const parent = descEl.parentElement;
+                                            if (parent) parent.appendChild(urlsEl);
+                                        }
+                                        urlsEl.innerHTML = extractedUrls.map(link => `
+                                            <a href="${link.url}"
+                                               target="_blank"
+                                               rel="noopener noreferrer"
+                                               class="inline-flex items-center px-2 py-1 rounded text-xs font-medium ${link.isTrusted ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'bg-red-50 text-red-700 hover:bg-red-100'} transition-colors border ${link.isTrusted ? 'border-blue-100' : 'border-red-100'}"
+                                               title="${link.isTrusted ? 'Verified Link' : 'Untrusted Domain'}">
+                                                <span class="mr-1">${link.isTrusted ? '🔗' : '⚠️'}</span>
+                                                ${this.config && this.config.sanitizer ? this.config.sanitizer(link.label) : link.label}
+                                            </a>
+                                        `).join(' ');
+                                    }
                                 }
-                                urlsEl.innerHTML = extractedUrls.map(link => `
-                                    <a href="${link.url}"
-                                       target="_blank"
-                                       rel="noopener noreferrer"
-                                       class="inline-flex items-center px-2 py-1 rounded text-xs font-medium ${link.isTrusted ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'bg-red-50 text-red-700 hover:bg-red-100'} transition-colors border ${link.isTrusted ? 'border-blue-100' : 'border-red-100'}"
-                                       title="${link.isTrusted ? 'Verified Link' : 'Untrusted Domain'}">
-                                        <span class="mr-1">${link.isTrusted ? '🔗' : '⚠️'}</span>
-                                        ${this.config?.sanitizer ? this.config.sanitizer(link.label) : link.label}
-                                    </a>
-                                `).join(' ');
                             }
                         }
                     }
@@ -333,4 +340,9 @@ namespace Shared.TranslationManager {
             }
         }
     }
+}
+
+// Enable Unit Testing in Node environment
+if (typeof module !== 'undefined') {
+    module.exports = Shared.TranslationManager.TranslationManager;
 }

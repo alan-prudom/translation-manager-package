@@ -16,8 +16,8 @@ namespace Shared.TranslationManager {
         /** Name of GAS server function to call for translation */
         gasTranslationFunction: string;
 
-        /** DOM selectors for finding elements */
-        selectors: {
+        /** DOM selectors for finding elements (Optional if using headless mode with callbacks) */
+        selectors?: {
             /** Container element selector (use {id} placeholder) */
             container: string;
             /** Title element selector (relative to container) */

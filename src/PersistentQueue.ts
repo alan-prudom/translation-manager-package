@@ -12,7 +12,7 @@ namespace Shared.TranslationManager {
          */
         public static push(eventId: string): void {
             const queue = this.get();
-            if (!queue.includes(eventId)) {
+            if (queue.indexOf(eventId) === -1) {
                 queue.push(eventId);
                 this.save(queue);
             }
@@ -54,4 +54,9 @@ namespace Shared.TranslationManager {
             localStorage.setItem(this.KEY, JSON.stringify(queue));
         }
     }
+}
+
+// Enable Unit Testing in Node environment
+if (typeof module !== 'undefined') {
+    module.exports = Shared.TranslationManager.PersistentQueue;
 }
