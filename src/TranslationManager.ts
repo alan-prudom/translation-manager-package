@@ -232,15 +232,18 @@ namespace Shared.TranslationManager {
 
                 // Call GAS translation function dynamically
                 const translationResult = await new Promise<TranslationResult>((resolve, reject) => {
-                    const gasFunction = (window as any).google.script.run[this.config!.gasTranslationFunction];
+                    const runner = (window as any).google.script.run
+                        .withSuccessHandler(resolve)
+                        .withFailureHandler(reject);
+
+                    const gasFunction = runner[this.config!.gasTranslationFunction];
+
                     if (!gasFunction) {
                         reject(new Error(`GAS function '${this.config!.gasTranslationFunction}' not found`));
                         return;
                     }
-                    gasFunction
-                        .withSuccessHandler(resolve)
-                        .withFailureHandler(reject)
-                        (id, locale, (entry as any)?.calendarId || (entry as any)?.contextId);
+
+                    gasFunction(id, locale, (entry as any)?.calendarId || (entry as any)?.contextId);
                 });
 
                 // Fire translation complete callback
