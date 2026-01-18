@@ -24,10 +24,18 @@ Translating large amounts of dynamic content (like calendar events or task lists
 This package is distributed as part of the monorepo. To use it in a new project:
 
 1.  Copy the `Shared/TranslationManager/dist/TranslationManager.js` to your project's client-side build.
-2.  (Recommended) Use Git Subtree to track updates:
-    ```bash
-    git subtree add --prefix Shared/TranslationManager [remote_url] main --squash
-    ```
+2. (Recommended) Use Git Subtree to track updates (see [Distribution & Subtree](#distribution--subtree)).
+
+## Distribution & Subtree
+
+If you are maintaining this package within a monorepo, use the following PowerShell scripts in the `scripts/` folder to sync with the standalone repository:
+
+- **Push Changes**: `.\scripts\push-standalone.ps1`
+  - Pushes the local `Shared/TranslationManager` folder to the `main` branch of the standalone repository.
+- **Pull Changes**: `.\scripts\pull-standalone.ps1`
+  - Pulls updates from the standalone repository back into the monorepo.
+
+**Standalone Repo**: `https://github.com/alan-prudom/translation-manager-package.git`
 
 ## Quick Start
 
