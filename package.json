@@ -1,0 +1,42 @@
+{
+    "name": "@shared/translation-manager",
+    "version": "1.0.0",
+    "description": "Portable background translation system for Google Apps Script SPAs",
+    "main": "dist/TranslationManager.js",
+    "types": "src/Types.ts",
+    "scripts": {
+        "build": "tsc",
+        "test": "jest",
+        "test:coverage": "jest --coverage",
+        "lint": "tsc --noEmit"
+    },
+    "keywords": [
+        "translation",
+        "i18n",
+        "google-apps-script",
+        "gas",
+        "background-translation",
+        "viewport-aware",
+        "batching"
+    ],
+    "author": "Alan Prudom",
+    "license": "MIT",
+    "peerDependencies": {
+        "@shared/i18n": "^1.0.0"
+    },
+    "devDependencies": {
+        "@types/google-apps-script": "^1.0.0",
+        "@types/jest": "^29.0.0",
+        "jest": "^29.0.0",
+        "ts-jest": "^29.0.0",
+        "typescript": "^5.0.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/alan-prudom/translation-manager-package.git"
+    },
+    "bugs": {
+        "url": "https://github.com/alan-prudom/translation-manager-package/issues"
+    },
+    "homepage": "https://github.com/alan-prudom/translation-manager-package#readme"
+}
