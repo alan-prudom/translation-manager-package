@@ -1,34 +1,17 @@
+/// <reference path="PersistentQueue.ts" />
+/// <reference path="TranslationWindow.ts" />
+/// <reference path="Types.ts" />
 
-import { Shared as PersistentQueueModule } from './PersistentQueue';
-
-import { Shared as TranslationWindowModule } from './TranslationWindow';
-import { Shared as TypesModule } from './Types';
-
-export namespace Shared {
+namespace Shared {
     export namespace TranslationManager {
-        let PersistentQueue: any;
-        try {
-            PersistentQueue = PersistentQueueModule.TranslationManager.PersistentQueue;
-        } catch (e) {
-            const globalScope = (typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : {}));
-            const GlobalShared = (globalScope as any)['Shared'];
-            PersistentQueue = GlobalShared?.TranslationManager?.PersistentQueue;
-        }
-
-        let TranslationWindow: any;
-        try {
-            TranslationWindow = TranslationWindowModule.TranslationManager.TranslationWindow;
-        } catch (e) {
-            const globalScope = (typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : {}));
-            const GlobalShared = (globalScope as any)['Shared'];
-            TranslationWindow = GlobalShared?.TranslationManager?.TranslationWindow;
-        }
+        let PersistentQueue: any = Shared.TranslationManager.PersistentQueue;
+        let TranslationWindow: any = Shared.TranslationManager.TranslationWindow;
 
         // Type aliases
-        type TranslationManagerConfig = TypesModule.TranslationManager.TranslationManagerConfig;
-        type TranslatableEntry = TypesModule.TranslationManager.TranslatableEntry;
-        type TranslationResult = TypesModule.TranslationManager.TranslationResult;
-        type EntryVisibility = TypesModule.TranslationManager.EntryVisibility;
+        type TranslationManagerConfig = Shared.TranslationManager.TranslationManagerConfig;
+        type TranslatableEntry = Shared.TranslationManager.TranslatableEntry;
+        type TranslationResult = Shared.TranslationManager.TranslationResult;
+        type EntryVisibility = Shared.TranslationManager.EntryVisibility;
 
         /**
          * TranslationManager
@@ -273,7 +256,12 @@ export namespace Shared {
                             return;
                         }
 
-                        gasFunction(id, locale, (entry as any)?.calendarId || (entry as any)?.contextId);
+                        // Pass as single options object to ensure parameter stability in GAS (Rule: API Parameter Stability)
+                        gasFunction({
+                            id: id,
+                            locale: locale,
+                            context: (entry as any)?.calendarId || (entry as any)?.contextId
+                        });
                     });
 
                     // Fire translation complete callback

@@ -4,11 +4,11 @@
  * Enforces the ~12-15 entry limit per event-loop cycle to maintain performance.
  */
 
-import { Shared as TypesModule } from './Types';
+/// <reference path="Types.ts" />
 
-export namespace Shared {
+namespace Shared {
     export namespace TranslationManager {
-        type EntryVisibility = TypesModule.TranslationManager.EntryVisibility;
+        type EntryVisibility = Shared.TranslationManager.EntryVisibility;
 
         export class TranslationWindow {
             private static readonly MAX_BATCH_SIZE = 15;

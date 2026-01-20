@@ -3,7 +3,7 @@
  * Client-side persistence for the translation retry queue using localStorage.
  * Ensures reliability across browser sessions (FR-020).
  */
-export namespace Shared {
+namespace Shared {
     export namespace TranslationManager {
         export class PersistentQueue {
             private static readonly KEY = 'translationQueue';
