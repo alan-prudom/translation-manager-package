@@ -6,8 +6,23 @@ import { Shared as TypesModule } from './Types';
 
 export namespace Shared {
     export namespace TranslationManager {
-        import PersistentQueue = PersistentQueueModule.TranslationManager.PersistentQueue;
-        import TranslationWindow = TranslationWindowModule.TranslationManager.TranslationWindow;
+        let PersistentQueue: any;
+        try {
+            PersistentQueue = PersistentQueueModule.TranslationManager.PersistentQueue;
+        } catch (e) {
+            const globalScope = (typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : {}));
+            const GlobalShared = (globalScope as any)['Shared'];
+            PersistentQueue = GlobalShared?.TranslationManager?.PersistentQueue;
+        }
+
+        let TranslationWindow: any;
+        try {
+            TranslationWindow = TranslationWindowModule.TranslationManager.TranslationWindow;
+        } catch (e) {
+            const globalScope = (typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : {}));
+            const GlobalShared = (globalScope as any)['Shared'];
+            TranslationWindow = GlobalShared?.TranslationManager?.TranslationWindow;
+        }
 
         // Type aliases
         type TranslationManagerConfig = TypesModule.TranslationManager.TranslationManagerConfig;
