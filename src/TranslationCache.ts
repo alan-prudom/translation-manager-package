@@ -4,7 +4,7 @@
  * Each language pair (e.g., en-es) is stored in a separate partition to optimize GAS 9KB limits.
  */
 
-namespace Shared.TranslationManager {
+export namespace Shared.TranslationManager {
     export interface CacheEntry {
         hash: string;
         sourceText: string;

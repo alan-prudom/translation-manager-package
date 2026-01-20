@@ -3,7 +3,7 @@
  * @packageDocumentation
  */
 
-namespace Shared.TranslationManager {
+export namespace Shared.TranslationManager {
     /**
      * Configuration for TranslationManager
      */
