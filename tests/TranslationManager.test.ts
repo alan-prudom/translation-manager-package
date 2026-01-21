@@ -132,4 +132,45 @@ describe('TranslationManager', () => {
         expect(mockTitleEl.innerHTML).toBe('Hola');
         expect(mockDescEl.innerHTML).toBe('Mundo');
     });
+
+    it('should set needsRescan if called while processing', async () => {
+        const mgr = TranslationManager.getInstance();
+        mgr.configure({
+            i18nService: mockI18n,
+            onTranslationComplete: jest.fn()
+        });
+
+        (mgr as any).isProcessing = true;
+        await mgr.processBatch([{ id: '1' }]);
+        expect((mgr as any).needsRescan).toBe(true);
+    });
+
+    it('should use lenient viewport logic', () => {
+        const mgr = TranslationManager.getInstance();
+        const isInViewport = (mgr as any).isInViewport.bind(mgr);
+
+        // Mock a partially visible element (top is off-screen, but bottom is on-screen)
+        const partialEl = {
+            getBoundingClientRect: () => ({
+                top: -100,
+                bottom: 100,
+                left: 0,
+                right: 100
+            })
+        } as any;
+
+        expect(isInViewport(partialEl)).toBe(true);
+
+        // Mock a fully off-screen element
+        const offScreenEl = {
+            getBoundingClientRect: () => ({
+                top: 900,
+                bottom: 1000,
+                left: 0,
+                right: 100
+            })
+        } as any;
+
+        expect(isInViewport(offScreenEl)).toBe(false);
+    });
 });

@@ -18,6 +18,8 @@ export class TranslationManager {
     private isProcessing = false;
     private localeSubscriptionSet = false;
 
+    private needsRescan = false;
+
     private constructor() { }
 
     public static getInstance(): TranslationManager {
@@ -56,7 +58,13 @@ export class TranslationManager {
      * Process a batch of entries and determine what needs translation based on viewport
      */
     public async processBatch(entries: any[]): Promise<void> {
-        if (!this.config || this.isProcessing) return;
+        if (!this.config) return;
+
+        if (this.isProcessing) {
+            console.log('[TranslationManager] Already processing. Flagging rescan.');
+            this.needsRescan = true;
+            return;
+        }
 
         const currentLocale = this.config.i18nService.getCurrentLocale();
         if (currentLocale === 'en') return; // Don't translate English
@@ -94,6 +102,14 @@ export class TranslationManager {
         if (batchIds.length > 0) {
             await this.processBatchIds(batchIds, entries);
         }
+
+        // Check if we need to scan again (new entries arrived while processing)
+        if (this.needsRescan) {
+            console.log('[TranslationManager] Running deferred rescan...');
+            this.needsRescan = false;
+            // Short delay to let DOM settle
+            setTimeout(() => this.processBatch(entries), 50);
+        }
     }
 
     /**
@@ -113,21 +129,22 @@ export class TranslationManager {
 
     private async processBatchIds(ids: string[], allEntries: any[]): Promise<void> {
         this.isProcessing = true;
+        try {
+            for (const id of ids) {
+                const entry = allEntries.find(e => e.id === id);
+                if (!entry) continue;
 
-        for (const id of ids) {
-            const entry = allEntries.find(e => e.id === id);
-            if (!entry) continue;
-
-            try {
-                await this.translateEntry(entry);
-                // Artificial delay to prevent overlapping GAS calls
-                await new Promise(resolve => setTimeout(resolve, this.config.delay || 100));
-            } catch (err) {
-                console.warn(`[TranslationManager] Failed to translate ${id}:`, err);
+                try {
+                    await this.translateEntry(entry);
+                    // Artificial delay to prevent overlapping GAS calls
+                    await new Promise(resolve => setTimeout(resolve, this.config.delay || 100));
+                } catch (err) {
+                    console.warn(`[TranslationManager] Failed to translate ${id}:`, err);
+                }
             }
+        } finally {
+            this.isProcessing = false;
         }
-
-        this.isProcessing = false;
     }
 
     private async translateEntry(entry: any): Promise<void> {
@@ -212,11 +229,15 @@ export class TranslationManager {
 
     private isInViewport(element: HTMLElement): boolean {
         const rect = element.getBoundingClientRect();
+        const windowHeight = (window.innerHeight || document.documentElement.clientHeight);
+        const windowWidth = (window.innerWidth || document.documentElement.clientWidth);
+
+        // More lenient: check if any part of the element is in the viewport
         return (
-            rect.top >= 0 &&
-            rect.left >= 0 &&
-            rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
-            rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+            rect.bottom > 0 &&
+            rect.right > 0 &&
+            rect.top < windowHeight &&
+            rect.left < windowWidth
         );
     }
 }
