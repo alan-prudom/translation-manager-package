@@ -5,10 +5,10 @@
     "main": "dist/TranslationManager.js",
     "types": "src/Types.ts",
     "scripts": {
-        "build": "tsc",
+        "build": "npx ts-node scripts/bundle.ts",
         "test": "jest",
         "test:coverage": "jest --coverage",
-        "lint": "tsc --noEmit"
+        "lint": "npx tsc --noEmit"
     },
     "keywords": [
         "translation",

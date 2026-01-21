@@ -1,358 +1,222 @@
-/// <reference path="PersistentQueue.ts" />
-/// <reference path="TranslationWindow.ts" />
-/// <reference path="Types.ts" />
+/**
+ * TranslationManager.ts
+ * Core logic for the background translation system.
+ */
 
-namespace Shared {
-    export namespace TranslationManager {
-        let PersistentQueue: any = Shared.TranslationManager.PersistentQueue;
-        let TranslationWindow: any = Shared.TranslationManager.TranslationWindow;
+import {
+    TranslationManagerConfig,
+    TranslationResult,
+    EntryVisibility
+} from './Types';
+import { PersistentQueue } from './PersistentQueue';
+import { TranslationWindow } from './TranslationWindow';
+import { TranslationCache } from './TranslationCache';
 
-        // Type aliases
-        type TranslationManagerConfig = Shared.TranslationManager.TranslationManagerConfig;
-        type TranslatableEntry = Shared.TranslationManager.TranslatableEntry;
-        type TranslationResult = Shared.TranslationManager.TranslationResult;
-        type EntryVisibility = Shared.TranslationManager.EntryVisibility;
+export class TranslationManager {
+    private static instance: TranslationManager;
+    private config!: TranslationManagerConfig;
+    private isProcessing = false;
+    private localeSubscriptionSet = false;
 
-        /**
-         * TranslationManager
-         * Coordinates background translation tasks with configurable behavior.
-         *
-         * @example
-         * const mgr = TranslationManager.getInstance();
-         * mgr.configure({
-         *   i18nService: Shared.I18n.i18n,
-         *   gasTranslationFunction: 'performTranslation',
-         *   selectors: {
-         *     container: '[data-event-id="{id}"]',
-         *     title: '.entry-title',
-         *     description: '.entry-description'
-         *   }
-         * });
-         * await mgr.processBatch(entries);
-         */
-        export class TranslationManager {
-            private static instance: TranslationManager;
-            private config: TranslationManagerConfig | null = null;
-            private isProcessing: boolean = false;
-            private queuedEntries: TranslatableEntry[] | null = null;
-            private currentProcessingLocale: string | null = null;
+    private constructor() { }
 
-            private constructor() { }
+    public static getInstance(): TranslationManager {
+        if (!TranslationManager.instance) {
+            TranslationManager.instance = new TranslationManager();
+        }
+        return TranslationManager.instance;
+    }
 
-            /**
-             * Get singleton instance
-             */
-            public static getInstance(): TranslationManager {
-                if (!TranslationManager.instance) {
-                    TranslationManager.instance = new TranslationManager();
-                }
-                return TranslationManager.instance;
+    /**
+     * Configure the manager with application-specific settings
+     */
+    public configure(config: TranslationManagerConfig): void {
+        this.config = {
+            delay: 100, // Default 100ms delay
+            gasTranslationFunction: 'performTranslation',
+            ...config
+        };
+
+        if (!this.config.selectors && !this.config.onTranslationComplete) {
+            throw new Error('[TranslationManager] config.onTranslationComplete is required when using headless mode (no selectors)');
+        }
+
+        if (!this.localeSubscriptionSet) {
+            this.config.i18nService.subscribe(() => {
+                // Clear state when language changes?
+                // Usually we just let the next batch handle it.
+            });
+            this.localeSubscriptionSet = true;
+        }
+
+        console.log('[TranslationManager] Configured');
+    }
+
+    /**
+     * Process a batch of entries and determine what needs translation based on viewport
+     */
+    public async processBatch(entries: any[]): Promise<void> {
+        if (!this.config || this.isProcessing) return;
+
+        const currentLocale = this.config.i18nService.getCurrentLocale();
+        if (currentLocale === 'en') return; // Don't translate English
+
+        // 1. Map entries to EntryVisibility using selectors
+        const visibilityData: EntryVisibility[] = entries.map(entry => {
+            let isViewable = false;
+
+            if (this.config.selectors) {
+                const container = document.querySelector(this.config.selectors.container.replace('{id}', entry.id));
+                isViewable = container ? this.isInViewport(container as HTMLElement) : false;
             }
 
-            /**
-             * Configure the translation manager
-             * Must be called before processBatch()
-             *
-             * @param config - Configuration object
-             * @throws {Error} If required fields are missing or invalid
-             */
-            public configure(config: TranslationManagerConfig): void {
-                // Validate required fields
-                if (!config.i18nService) {
-                    throw new Error('[TranslationManager] config.i18nService is required');
-                }
-                if (!config.gasTranslationFunction) {
-                    throw new Error('[TranslationManager] config.gasTranslationFunction is required');
-                }
-                if (config.selectors) {
-                    if (!config.selectors.container) {
-                        throw new Error('[TranslationManager] config.selectors.container is required if selectors provided');
-                    }
-                    if (config.selectors.container.indexOf('{id}') === -1) {
-                        throw new Error('[TranslationManager] config.selectors.container must include {id} placeholder');
-                    }
-                    if (!config.selectors.title) {
-                        throw new Error('[TranslationManager] config.selectors.title is required if selectors provided');
-                    }
-                    if (!config.selectors.description) {
-                        throw new Error('[TranslationManager] config.selectors.description is required if selectors provided');
-                    }
-                } else if (!config.onTranslationComplete) {
-                    // If no selectors, we MUST have a callback to deliver results
-                    throw new Error('[TranslationManager] config.onTranslationComplete is required when using headless mode (no selectors)');
-                }
+            // Check if already translated or being translated
+            const isTranslated = (entry as any).isTranslated;
 
-                // Validate batch sizes if provided
-                if (config.maxBatchSize !== undefined && config.maxBatchSize < 1) {
-                    throw new Error('[TranslationManager] config.maxBatchSize must be >= 1');
-                }
-                if (config.recommendedBatchSize !== undefined && config.recommendedBatchSize < 1) {
-                    throw new Error('[TranslationManager] config.recommendedBatchSize must be >= 1');
-                }
+            return {
+                id: entry.id,
+                isViewable,
+                needsTranslation: !isTranslated
+            };
+        });
 
-                this.config = config;
-                console.log('[TranslationManager] Configured successfully');
+        // 2. Get optimal batch from TranslationWindow
+        const batchIds = TranslationWindow.getBatch(visibilityData);
+
+        if (batchIds.length === 0) {
+            // Check Persistent Queue for background tasks if no visible priorities
+            const queuedId = PersistentQueue.pop();
+            if (queuedId) {
+                batchIds.push(queuedId);
             }
+        }
 
-            /**
-             * Process a batch of entries for translation
-             *
-             * @param entries - Array of translatable entries
-             * @throws {Error} If not configured
-             */
-            public async processBatch(entries: TranslatableEntry[]): Promise<void> {
-                if (!this.config) {
-                    throw new Error('[TranslationManager] Not configured. Call configure() first.');
-                }
+        if (batchIds.length > 0) {
+            await this.processBatchIds(batchIds, entries);
+        }
+    }
 
-                const currentLocale = this.config.i18nService.getCurrentLocale();
-
-                // Skip background translation for English (original content)
-                if (currentLocale === 'en') {
-                    console.log('[TranslationManager] Skipping background translation for English locale');
-                    return;
-                }
-
-                if (this.isProcessing) {
-                    console.log('[TranslationManager] Already processing. Queuing next batch.');
-                    this.queuedEntries = entries;
-                    return;
-                }
-
-                this.isProcessing = true;
-                this.currentProcessingLocale = currentLocale;
-
-                try {
-                    // 1. Calculate the optimal batch using core logic
-                    const visibilityData: EntryVisibility[] = entries.map(e => ({
-                        id: e.id,
-                        isViewable: this.isElementViewable(e.id),
-                        needsTranslation: !e.isTranslated
-                    }));
-
-                    const batchIds = TranslationWindow.getBatch(visibilityData);
-                    console.log(`[TranslationManager] Batch size: ${batchIds.length} for locale ${currentLocale}`);
-
-                    if (batchIds.length === 0) {
-                        // Check if we need to continue with queued entries
-                        this.checkQueue();
-                        return;
-                    }
-
-                    // 2. Process each in batch (Sequential to avoid GAS quota collisions)
-                    for (const id of batchIds) {
-                        // Stop if locale changed mid-batch
-                        if (this.config.i18nService.getCurrentLocale() !== this.currentProcessingLocale) {
-                            console.warn('[TranslationManager] Locale changed during batch. Aborting.');
-                            break;
-                        }
-                        const entry = entries.find(e => e.id === id);
-                        await this.translateEntry(id, currentLocale, entry);
-                    }
-
-                    // Fire batch complete callback
-                    if (this.config.onBatchComplete) {
-                        try {
-                            this.config.onBatchComplete(batchIds.length, currentLocale);
-                        } catch (e) {
-                            console.warn('[TranslationManager] onBatchComplete callback error:', e);
-                        }
-                    }
-                } finally {
-                    this.isProcessing = false;
-                    this.checkQueue();
-                }
+    /**
+     * Restore original English text for all entries
+     */
+    public restoreOriginals(entries: any[]): void {
+        entries.forEach(entry => {
+            if (entry.isTranslated) {
+                entry.title = entry.originalTitle || entry.title;
+                entry.description = entry.originalDescription || entry.description;
+                entry.isTranslated = false;
+                entry.originalTitle = undefined;
+                entry.originalDescription = undefined;
             }
+        });
+    }
 
-            /**
-             * Restore all entries to their original language
-             *
-             * @param entries - Array of entries to restore
-             */
-            public restoreOriginals(entries: TranslatableEntry[]): void {
-                if (!this.config) {
-                    console.warn('[TranslationManager] Not configured. Cannot restore originals.');
-                    return;
-                }
+    private async processBatchIds(ids: string[], allEntries: any[]): Promise<void> {
+        this.isProcessing = true;
 
-                console.log(`[TranslationManager] Restoring ${entries.length} entries to originals`);
-                entries.forEach(entry => {
-                    if (entry.isTranslated) {
-                        entry.title = entry.originalTitle || entry.title;
-                        entry.description = entry.originalDescription || entry.description;
-                        entry.isTranslated = false;
+        for (const id of ids) {
+            const entry = allEntries.find(e => e.id === id);
+            if (!entry) continue;
 
-                        // Update UI directly if elements exist
-                        if (this.config!.selectors) {
-                            const containerSelector = this.config!.selectors.container.replace('{id}', entry.id);
-                            const entryEl = document.querySelector(containerSelector);
-                            if (entryEl) {
-                                const titleEl = entryEl.querySelector(this.config!.selectors.title);
-                                if (titleEl && this.config!.translatedClasses?.title) {
-                                    this.config!.translatedClasses.title.forEach(cls => titleEl.classList.remove(cls));
-                                }
-                                const descEl = entryEl.querySelector(this.config!.selectors.description);
-                                if (descEl && this.config!.translatedClasses?.description) {
-                                    this.config!.translatedClasses.description.forEach(cls => descEl.classList.remove(cls));
-                                }
-                            }
-                        }
-                    }
-                });
+            try {
+                await this.translateEntry(entry);
+                // Artificial delay to prevent overlapping GAS calls
+                await new Promise(resolve => setTimeout(resolve, this.config.delay || 100));
+            } catch (err) {
+                console.warn(`[TranslationManager] Failed to translate ${id}:`, err);
             }
+        }
 
-            /**
-             * Check if an element is currently visible in the viewport
-             *
-             * @param id - Element identifier
-             * @returns True if element is viewable
-             */
-            public isElementViewable(id: string): boolean {
-                if (!this.config || !this.config.selectors) return false;
+        this.isProcessing = false;
+    }
 
-                const containerSelector = this.config.selectors.container.replace('{id}', id);
-                const el = document.querySelector(containerSelector);
-                if (!el) return false;
+    private async translateEntry(entry: any): Promise<void> {
+        const locale = this.config.i18nService.getCurrentLocale();
 
-                const rect = el.getBoundingClientRect();
-                return (
-                    rect.top >= 0 &&
-                    rect.left >= 0 &&
-                    rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
-                    rect.right <= (window.innerWidth || document.documentElement.clientWidth)
-                );
-            }
+        // 1. Check Cache
+        const cached = TranslationCache.get(entry.id, locale);
+        if (cached) {
+            this.applyTranslation(entry, cached);
+            return;
+        }
 
-            private checkQueue(): void {
-                if (this.queuedEntries) {
-                    const nextBatch = this.queuedEntries;
-                    this.queuedEntries = null;
-                    this.processBatch(nextBatch);
-                }
-            }
+        // 2. Call GAS
+        return new Promise((resolve, reject) => {
+            const gasFunction = this.config.gasTranslationFunction || 'performTranslation';
 
-            private async translateEntry(id: string, locale: string, entry?: TranslatableEntry): Promise<void> {
-                if (!this.config) return;
-
-                try {
-                    // Check if already translated
-                    if (entry?.isTranslated) {
-                        console.log(`[TranslationManager] ${id} already translated.Skpping.`);
-                        return;
-                    }
-
-                    console.log(`[TranslationManager] Requesting translation for ${id} into ${locale} `);
-
-                    // Call GAS translation function dynamically
-                    const translationResult = await new Promise<TranslationResult>((resolve, reject) => {
-                        const runner = (window as any).google.script.run
-                            .withSuccessHandler(resolve)
-                            .withFailureHandler(reject);
-
-                        const gasFunction = runner[this.config!.gasTranslationFunction];
-
-                        if (!gasFunction) {
-                            reject(new Error(`GAS function '${this.config!.gasTranslationFunction}' not found`));
-                            return;
-                        }
-
-                        // Pass as single options object to ensure parameter stability in GAS (Rule: API Parameter Stability)
-                        gasFunction({
-                            id: id,
-                            locale: locale,
-                            context: (entry as any)?.calendarId || (entry as any)?.contextId
-                        });
+            // @ts-ignore
+            google.script.run
+                .withSuccessHandler((result: TranslationResult) => {
+                    // Cache it
+                    TranslationCache.set(entry.id, locale, {
+                        hash: 'fixed', // Could use content hash later
+                        title: result.title,
+                        description: result.description
                     });
 
-                    // Fire translation complete callback
+                    this.applyTranslation(entry, result);
+                    PersistentQueue.remove(entry.id);
+
                     if (this.config.onTranslationComplete) {
-                        try {
-                            this.config.onTranslationComplete(id, translationResult);
-                        } catch (e) {
-                            console.warn('[TranslationManager] onTranslationComplete callback error:', e);
-                        }
+                        this.config.onTranslationComplete(entry.id, result);
                     }
-
-                    // Update DOM (Only if selectors provided)
-                    if (this.config.selectors) {
-                        const containerSelector = this.config.selectors.container.replace('{id}', id);
-                        const entryEl = document.querySelector(containerSelector);
-                        if (entryEl) {
-                            // Translate title
-                            if (translationResult.title) {
-                                const titleEl = entryEl.querySelector(this.config.selectors.title);
-                                if (titleEl) {
-                                    const sanitizedTitle = this.config.sanitizer
-                                        ? this.config.sanitizer(translationResult.title)
-                                        : translationResult.title;
-                                    titleEl.innerHTML = sanitizedTitle;
-
-                                    // Add translated classes
-                                    const titleClasses = this.config.translatedClasses?.title || ['text-indigo-800'];
-                                    titleClasses.forEach(cls => titleEl.classList.add(cls));
-                                }
-                            }
-
-                            // Translate description
-                            if (translationResult.description) {
-                                const descEl = entryEl.querySelector(this.config.selectors.description);
-                                if (descEl) {
-                                    const sanitizedDesc = this.config.sanitizer
-                                        ? this.config.sanitizer(translationResult.description)
-                                        : translationResult.description;
-                                    descEl.innerHTML = sanitizedDesc;
-
-                                    // Add translated classes
-                                    const descClasses = this.config.translatedClasses?.description || ['text-indigo-600', 'font-medium'];
-                                    descClasses.forEach(cls => descEl.classList.add(cls));
-
-                                    // Extract URLs if extractor provided
-                                    if (this.config.urlExtractor && this.config.trustedDomains) {
-                                        const extractedUrls = this.config.urlExtractor(
-                                            translationResult.description,
-                                            this.config.trustedDomains
-                                        );
-
-                                        if (extractedUrls.length > 0) {
-                                            let urlsEl = entryEl.querySelector('.entry-urls') as HTMLElement;
-                                            if (!urlsEl) {
-                                                urlsEl = document.createElement('div');
-                                                urlsEl.className = 'entry-urls flex flex-wrap gap-2 mt-2';
-                                                const parent = descEl.parentElement;
-                                                if (parent) parent.appendChild(urlsEl);
-                                            }
-                                            urlsEl.innerHTML = extractedUrls.map(link => `
-                                            <a href="${link.url}"
-                                               target="_blank"
-                                               rel="noopener noreferrer"
-                                               class="inline-flex items-center px-2 py-1 rounded text-xs font-medium ${link.isTrusted ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'bg-red-50 text-red-700 hover:bg-red-100'} transition-colors border ${link.isTrusted ? 'border-blue-100' : 'border-red-100'}"
-                                               title="${link.isTrusted ? 'Verified Link' : 'Untrusted Domain'}">
-                                                <span class="mr-1">${link.isTrusted ? '🔗' : '⚠️'}</span>
-                                                ${this.config && this.config.sanitizer ? this.config.sanitizer(link.label) : link.label}
-                                            </a>
-                                        `).join(' ');
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    resolve();
+                })
+                .withFailureHandler((err: Error) => {
+                    PersistentQueue.push(entry.id);
+                    if (this.config.onTranslationError) {
+                        this.config.onTranslationError(entry.id, err);
                     }
+                    reject(err);
+                })
+            [gasFunction]({
+                id: entry.id,
+                locale: locale,
+                context: (entry as any).calendarId
+            });
+        });
+    }
 
-                    PersistentQueue.remove(id);
-                } catch (e) {
-                    console.warn(`[TranslationManager] Translation failed for ${id}: `, e);
-                    PersistentQueue.push(id); // Ensure it stays in queue for retry
+    private applyTranslation(entry: any, result: TranslationResult): void {
+        if (!entry.isTranslated) {
+            entry.originalTitle = entry.title;
+            entry.originalDescription = entry.description;
+        }
 
-                    // Fire error callback
-                    if (this.config.onError) {
-                        try {
-                            this.config.onError(id, e);
-                        } catch (callbackError) {
-                            console.warn('[TranslationManager] onError callback error:', callbackError);
-                        }
+        entry.title = result.title;
+        entry.description = result.description;
+        entry.isTranslated = true;
+
+        // Apply to DOM if selectors are configured
+        if (this.config.selectors) {
+            const container = document.querySelector(this.config.selectors.container.replace('{id}', entry.id));
+            if (container) {
+                const titleEl = container.querySelector(this.config.selectors.title);
+                const descEl = container.querySelector(this.config.selectors.description);
+
+                if (titleEl) {
+                    titleEl.innerHTML = result.title;
+                    if (this.config.translatedClasses?.title) {
+                        titleEl.classList.add(...this.config.translatedClasses.title);
+                    }
+                }
+                if (descEl) {
+                    descEl.innerHTML = result.description;
+                    if (this.config.translatedClasses?.description) {
+                        descEl.classList.add(...this.config.translatedClasses.description);
                     }
                 }
             }
         }
+    }
+
+    private isInViewport(element: HTMLElement): boolean {
+        const rect = element.getBoundingClientRect();
+        return (
+            rect.top >= 0 &&
+            rect.left >= 0 &&
+            rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+            rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+        );
     }
 }

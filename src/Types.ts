@@ -3,131 +3,88 @@
  * @packageDocumentation
  */
 
-namespace Shared {
-    export namespace TranslationManager {
-        /**
-         * Configuration for TranslationManager
-         */
-        export interface TranslationManagerConfig {
-            // ===== REQUIRED =====
+/**
+ * Configuration for TranslationManager
+ */
+export interface TranslationManagerConfig {
+    /** I18n service instance for locale management */
+    i18nService: I18nService;
 
-            /** i18n service instance (e.g., Shared.I18n.i18n) */
-            i18nService: I18nService;
+    /** CSS selectors for translatable elements */
+    selectors?: {
+        container: string;
+        title: string;
+        description: string;
+    };
 
-            /** Name of GAS server function to call for translation */
-            gasTranslationFunction: string;
+    /** Optional CSS classes for translated elements */
+    translatedClasses?: {
+        title?: string[];
+        description?: string[];
+    };
 
-            /** DOM selectors for finding elements (Optional if using headless mode with callbacks) */
-            selectors?: {
-                /** Container element selector (use {id} placeholder) */
-                container: string;
-                /** Title element selector (relative to container) */
-                title: string;
-                /** Description element selector (relative to container) */
-                description: string;
-            };
+    /** Success callback */
+    onTranslationComplete?: (id: string, result: TranslationResult) => void;
 
-            // ===== OPTIONAL =====
+    /** Error callback */
+    onTranslationError?: (id: string, error: Error) => void;
 
-            /** CSS classes to add to translated elements */
-            translatedClasses?: {
-                title?: string[];
-                description?: string[];
-            };
+    /** The GAS function to call for server-side translation */
+    gasTranslationFunction?: string;
 
-            /** Callback when a single item is translated */
-            onTranslationComplete?: (id: string, result: TranslationResult) => void;
+    /** HTML Sanitizer function */
+    sanitizer?: (html: string) => string;
 
-            /** Callback when a batch completes */
-            onBatchComplete?: (batchSize: number, locale: string) => void;
+    /** URL Extractor function */
+    urlExtractor?: (text: string, trustedDomains: string[]) => any[];
 
-            /** Callback when translation fails */
-            onError?: (id: string, error: any) => void;
+    /** List of trusted domains for URL extraction */
+    trustedDomains?: string[];
 
-            /** HTML sanitizer function (security) */
-            sanitizer?: (html: string) => string;
+    /** Minimum processing delay (ms) */
+    delay?: number;
+}
 
-            /** URL extractor function (for link pills) */
-            urlExtractor?: (text: string, trustedDomains: string[]) => ExtractedUrl[];
+/**
+ * Translatable data for an entry
+ */
+export interface TranslatableEntry {
+    id: string;
+    title: string;
+    description: string;
+}
 
-            /** List of trusted domains for URL extraction */
-            trustedDomains?: string[];
+/**
+ * Result of a translation operation
+ */
+export interface TranslationResult {
+    title: string;
+    description: string;
+    originalTitle?: string;
+    originalDescription?: string;
+}
 
-            /** Maximum batch size (default: 15) */
-            maxBatchSize?: number;
+/**
+ * Minimal I18n service interface required by TranslationManager
+ */
+export interface I18nService {
+    /** Get current locale code (e.g., 'en', 'es', 'fr') */
+    getCurrentLocale(): string;
 
-            /** Recommended batch size (default: 12) */
-            recommendedBatchSize?: number;
-        }
+    /** Subscribe to locale changes */
+    subscribe(callback: (locale: string) => void): void;
+}
 
-        /**
-         * Entry that can be translated
-         */
-        export interface TranslatableEntry {
-            /** Unique identifier */
-            id: string;
+/**
+ * Entry visibility data for batching
+ */
+export interface EntryVisibility {
+    /** Entry identifier */
+    id: string;
 
-            /** Whether this entry has been translated */
-            isTranslated?: boolean;
+    /** Whether entry is currently viewable in viewport */
+    isViewable: boolean;
 
-            /** Original title (before translation) */
-            originalTitle?: string;
-
-            /** Original description (before translation) */
-            originalDescription?: string;
-
-            /** Allow additional properties for app-specific data */
-            [key: string]: any;
-        }
-
-        /**
-         * Result from GAS translation function
-         */
-        export interface TranslationResult {
-            /** Translated title */
-            title: string;
-
-            /** Translated description */
-            description: string;
-        }
-
-        /**
-         * Extracted URL from text
-         */
-        export interface ExtractedUrl {
-            /** Full URL */
-            url: string;
-
-            /** Display label for the link */
-            label: string;
-
-            /** Whether the domain is trusted */
-            isTrusted: boolean;
-        }
-
-        /**
-         * i18n Service interface (minimal contract)
-         */
-        export interface I18nService {
-            /** Get current locale code (e.g., 'en', 'es', 'fr') */
-            getCurrentLocale(): string;
-
-            /** Subscribe to locale changes */
-            subscribe(callback: (locale: string) => void): void;
-        }
-
-        /**
-         * Entry visibility data for batching
-         */
-        export interface EntryVisibility {
-            /** Entry identifier */
-            id: string;
-
-            /** Whether entry is currently viewable in viewport */
-            isViewable: boolean;
-
-            /** Whether entry needs translation */
-            needsTranslation: boolean;
-        }
-    }
+    /** Whether entry needs translation */
+    needsTranslation: boolean;
 }

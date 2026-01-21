@@ -1,20 +1,8 @@
-/**
- * Tests for TranslationWindow logic
- */
+import { TranslationWindow } from '../src/TranslationWindow';
+import { EntryVisibility } from '../src/Types';
 
 describe('TranslationWindow', () => {
-    let TranslationWindow: any;
-
-    beforeAll(() => {
-        // Mock global namespace
-        (global as any).Shared = {
-            TranslationManager: {}
-        };
-
-        TranslationWindow = require('../src/TranslationWindow');
-    });
-
-    const mockVisibility = (id: string, viewable: boolean, needs: boolean) => ({
+    const mockVisibility = (id: string, viewable: boolean, needs: boolean): EntryVisibility => ({
         id,
         isViewable: viewable,
         needsTranslation: needs
@@ -37,7 +25,7 @@ describe('TranslationWindow', () => {
             mockVisibility(i.toString(), true, true)
         );
 
-        const batch = TranslationWindow.getBatch(entries as any);
+        const batch = TranslationWindow.getBatch(entries);
         expect(batch.length).toBe(15);
     });
 

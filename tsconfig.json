@@ -7,10 +7,10 @@
             "DOM"
         ],
         /* Modules */
-        "module": "None",
-        "moduleResolution": "node",
+        "module": "ESNext",
+        "moduleResolution": "Node",
         /* Emit */
-        "outFile": "./dist/TranslationManager.js",
+        "outDir": "dist",
         "removeComments": false,
         "sourceMap": false,
         /* Interop Constraints */

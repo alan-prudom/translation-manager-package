@@ -3,66 +3,64 @@
  * Client-side persistence for the translation retry queue using localStorage.
  * Ensures reliability across browser sessions (FR-020).
  */
-namespace Shared {
-    export namespace TranslationManager {
-        export class PersistentQueue {
-            private static readonly KEY = 'translationQueue';
+export class PersistentQueue {
+    private static readonly KEY = 'translationQueue';
 
-            /**
-             * Pushes a new item to the queue.
-             */
-            public static push(eventId: string): void {
-                const queue = this.get();
-                if (queue.indexOf(eventId) === -1) {
-                    queue.push(eventId);
-                    this.save(queue);
-                }
-            }
+    /**
+     * Push an ID to the queue if not already present
+     */
+    public static push(id: string): void {
+        const queue = this.get();
+        if (!queue.includes(id)) {
+            queue.push(id);
+            this.save(queue);
+        }
+    }
 
-            /**
-             * Retrieves the current queue.
-             */
-            public static get(): string[] {
-                // Return empty array if not in browser environment
-                if (typeof localStorage === 'undefined') {
-                    return [];
-                }
+    /**
+     * Remove an ID from the queue
+     */
+    public static remove(id: string): void {
+        const queue = this.get().filter(item => item !== id);
+        this.save(queue);
+    }
 
-                const data = localStorage.getItem(this.KEY);
-                try {
-                    return data ? JSON.parse(data) : [];
-                } catch (e) {
-                    console.error('[PersistentQueue] Failed to parse queue:', e);
-                    return [];
-                }
-            }
+    /**
+     * Get all IDs in the queue
+     */
+    public static get(): string[] {
+        try {
+            const data = localStorage.getItem(this.KEY);
+            return data ? JSON.parse(data) : [];
+        } catch (e) {
+            console.warn('[PersistentQueue] Read failed:', e);
+            return [];
+        }
+    }
 
-            /**
-             * Removes an item from the queue if exists.
-             */
-            public static remove(eventId: string): void {
-                const queue = this.get();
-                const index = queue.indexOf(eventId);
-                if (index > -1) {
-                    queue.splice(index, 1);
-                    this.save(queue);
-                }
-            }
+    /**
+     * Pop the next ID from the queue
+     */
+    public static pop(): string | null {
+        const queue = this.get();
+        if (queue.length === 0) return null;
+        const next = queue.shift();
+        this.save(queue);
+        return next || null;
+    }
 
-            /**
-             * Clears the entire queue.
-             */
-            public static clear(): void {
-                if (typeof localStorage !== 'undefined') {
-                    localStorage.removeItem(this.KEY);
-                }
-            }
+    /**
+     * Clear the queue
+     */
+    public static clear(): void {
+        localStorage.removeItem(this.KEY);
+    }
 
-            private static save(queue: string[]): void {
-                if (typeof localStorage !== 'undefined') {
-                    localStorage.setItem(this.KEY, JSON.stringify(queue));
-                }
-            }
+    private static save(queue: string[]): void {
+        try {
+            localStorage.setItem(this.KEY, JSON.stringify(queue));
+        } catch (e) {
+            console.warn('[PersistentQueue] Save failed:', e);
         }
     }
 }

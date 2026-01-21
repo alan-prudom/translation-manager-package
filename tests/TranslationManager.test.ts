@@ -1,13 +1,9 @@
-/**
- * Tests for TranslationManager Integration (Managed and Headless)
- */
+import { TranslationManager } from '../src/TranslationManager';
 
 describe('TranslationManager', () => {
-    let TranslationManager: any;
     let mockI18n: any;
-    let mockRunner: any;
 
-    beforeAll(() => {
+    beforeEach(() => {
         // Mock DOM
         (global as any).document = {
             querySelector: jest.fn(),
@@ -23,36 +19,23 @@ describe('TranslationManager', () => {
                         withFailureHandler: jest.fn().mockReturnThis()
                     }
                 }
-            }
+            },
+            setTimeout: (cb: any, ms: number) => cb()
         };
+        (global as any).google = (global as any).window.google;
 
-        // Mock localStorage
+        // Mock localStorage/sessionStorage
         (global as any).localStorage = {
             getItem: jest.fn(),
             setItem: jest.fn(),
             removeItem: jest.fn()
         };
-
-        // Mock global namespace
-        const mockPersistentQueue = require('../src/PersistentQueue');
-        (global as any).PersistentQueue = mockPersistentQueue;
-        (global as any).Shared = {
-            TranslationManager: {
-                PersistentQueue: mockPersistentQueue
-            },
-            I18n: {
-                i18n: {
-                    getCurrentLocale: jest.fn(),
-                    subscribe: jest.fn()
-                }
-            }
+        (global as any).sessionStorage = {
+            getItem: jest.fn(),
+            setItem: jest.fn(),
+            removeItem: jest.fn()
         };
 
-        TranslationManager = require('../src/TranslationManager');
-    });
-
-    beforeEach(() => {
-        jest.clearAllMocks();
         mockI18n = {
             getCurrentLocale: jest.fn().mockReturnValue('es'),
             subscribe: jest.fn()
@@ -69,7 +52,7 @@ describe('TranslationManager', () => {
                 i18nService: mockI18n,
                 gasTranslationFunction: 'translate'
                 // Missing both selectors AND onTranslationComplete
-            });
+            } as any);
         }).toThrow('[TranslationManager] config.onTranslationComplete is required when using headless mode (no selectors)');
     });
 
@@ -94,19 +77,17 @@ describe('TranslationManager', () => {
             onTranslationComplete: onComplete
         });
 
-        // Setup mock GAS response
         const mockResponse = { title: 'Hola', description: 'Mundo' };
-        const mockFunc = jest.fn();
-        (window as any).google.script.run.translate = mockFunc;
 
-        // Mock the runner behavior
+        // Mock the GAS runner
         const runner = (window as any).google.script.run;
+        (runner as any).translate = jest.fn();
         runner.withSuccessHandler.mockImplementation((cb: any) => {
             cb(mockResponse);
             return runner;
         });
 
-        await mgr.translateEntry('1', 'es', { id: '1', title: 'Hello', description: 'World' });
+        await (mgr as any).translateEntry({ id: '1', title: 'Hello', description: 'World' });
 
         expect(onComplete).toHaveBeenCalledWith('1', mockResponse);
         expect(document.querySelector).not.toHaveBeenCalled();
@@ -137,16 +118,15 @@ describe('TranslationManager', () => {
             }
         });
 
-        // Setup mock GAS response
         const mockResponse = { title: 'Hola', description: 'Mundo' };
         const runner = (window as any).google.script.run;
+        (runner as any).translate = jest.fn();
         runner.withSuccessHandler.mockImplementation((cb: any) => {
             cb(mockResponse);
             return runner;
         });
-        (window as any).google.script.run.translate = jest.fn();
 
-        await mgr.translateEntry('123', 'es', { id: '123', title: 'Hello', description: 'World' });
+        await (mgr as any).translateEntry({ id: '123', title: 'Hello', description: 'World' });
 
         expect(document.querySelector).toHaveBeenCalledWith('#item-123');
         expect(mockTitleEl.innerHTML).toBe('Hola');
