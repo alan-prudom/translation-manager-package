@@ -90,6 +90,7 @@ function performTranslation(id, lang) {
 - [Calendar App Migration](./examples/gas-calendar/)
 - [Standalone Task List](./examples/gas-tasks/)
 - [Minimal Note Integration](./examples/gas-notes/)
+- [Vue + Bootstrap SPA (Template Repository)](https://github.com/alan-prudom/vue-gas-spa-standalone.git)
 
 ## License
 MIT
