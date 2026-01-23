@@ -39,7 +39,9 @@ If you are maintaining this package within a monorepo, use the following PowerSh
 
 ## Quick Start
 
-### 1. Configure the Manager
+### DOM Mode (Direct DOM Updates)
+For traditional server-rendered apps where TranslationManager updates the DOM directly:
+
 ```typescript
 import { TranslationManager } from '@shared/translation-manager';
 
@@ -56,11 +58,43 @@ tm.configure({
 });
 ```
 
+### Headless Mode (For Vue, React, etc.)
+**Recommended for modern reactive frameworks**. TranslationManager calls your callback instead of updating the DOM:
+
+```typescript
+const tm = TranslationManager.getInstance();
+
+tm.configure({
+  i18nService: {
+    getCurrentLocale: () => currentLocale.value,
+    subscribe: (cb) => { /* optional */ }
+  },
+  gasTranslationFunction: 'performTranslation',
+  
+  // Callback receives translation results
+  onTranslationComplete: (id, result) => {
+    const item = items.value.find(i => i.id === id);
+    if (item) {
+      item.title = result.title;
+      item.description = result.description;
+      item.isTranslated = true;
+    }
+  },
+  onError: (id, err) => {
+    console.error(`Translation failed for ${id}:`, err);
+  }
+});
+```
+
+**Important**: Do NOT provide both `selectors` and `onTranslationComplete`. Use one or the other:
+- **DOM Mode**: Provide `selectors` (TranslationManager updates DOM)
+- **Headless Mode**: Provide `onTranslationComplete` (you update your data model)
+
 ### 2. Process a Batch
 ```typescript
 const entries = [
-  { id: '1', title: 'Hello', description: 'World' },
-  { id: '2', title: 'Foo', description: 'Bar' }
+  { id: '1', title: 'Hello', description: 'World', isTranslated: false },
+  { id: '2', title: 'Foo', description: 'Bar', isTranslated: false }
 ];
 
 await tm.processBatch(entries);
@@ -68,22 +102,29 @@ await tm.processBatch(entries);
 
 ### 3. Server-Side Function
 ```javascript
-function performTranslation(id, lang) {
+function performTranslation(options) {
+  const { id, locale, context } = options;
   // Your logic here
-  return { title: '...', description: '...' };
+  return { 
+    title: LanguageApp.translate(originalTitle, 'en', locale),
+    description: LanguageApp.translate(originalDesc, 'en', locale)
+  };
 }
 ```
 
 ## Configuration
 
-| Option                   | Type          | Required | Description                                          |
-| :----------------------- | :------------ | :------- | :--------------------------------------------------- |
-| `i18nService`            | `I18nService` | Yes      | Service to get current locale.                       |
-| `gasTranslationFunction` | `string`      | Yes      | Name of global GAS function.                         |
-| `selectors`              | `object`      | Yes      | DOM selectors (`container`, `title`, `description`). |
-| `translatedClasses`      | `object`      | No       | CSS classes to add to translated elements.           |
-| `urlExtractor`           | `function`    | No       | Extract and display URLs in descriptions.            |
-| `onBatchComplete`        | `function`    | No       | Callback after a batch finishes.                     |
+| Option                   | Type          | Required | Description                                                            |
+| :----------------------- | :------------ | :------- | :--------------------------------------------------------------------- |
+| `i18nService`            | `I18nService` | Yes      | Service to get current locale.                                         |
+| `gasTranslationFunction` | `string`      | Yes      | Name of global GAS function.                                           |
+| `selectors`              | `object`      | No*      | DOM selectors (`container`, `title`, `description`). Use for DOM mode. |
+| `onTranslationComplete`  | `function`    | No*      | Callback for headless mode. Receives `(id, result)`.                   |
+| `onError`                | `function`    | No       | Error callback. Receives `(id, error)`.                                |
+| `translatedClasses`      | `object`      | No       | CSS classes to add to translated elements (DOM mode only).             |
+| `delay`                  | `number`      | No       | Delay between translations (default: 100ms).                           |
+
+**\*Note**: Provide either `selectors` (DOM mode) OR `onTranslationComplete` (headless mode), not both.
 
 ## Examples
 
