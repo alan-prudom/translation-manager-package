@@ -23,9 +23,9 @@ async function bundle() {
             format: 'iife',
             globalName: 'TranslationManagerLibrary',
             target: 'es2015',
-            // Map the global name to the expected Shared.TranslationManager namespace
+            // Map the global name to the expected window.Shared.TranslationManager namespace
             footer: {
-                js: 'if (typeof Shared === "undefined") Shared = {}; if (typeof Shared.TranslationManager === "undefined") Shared.TranslationManager = TranslationManagerLibrary;'
+                js: 'if (typeof window.Shared === "undefined") window.Shared = {}; if (typeof window.Shared.TranslationManager === "undefined") window.Shared.TranslationManager = TranslationManagerLibrary;'
             }
         });
 

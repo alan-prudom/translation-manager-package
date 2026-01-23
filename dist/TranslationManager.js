@@ -372,4 +372,4 @@ var TranslationManagerLibrary = (() => {
   };
   return __toCommonJS(TranslationManager_exports);
 })();
-if (typeof Shared === "undefined") Shared = {}; if (typeof Shared.TranslationManager === "undefined") Shared.TranslationManager = TranslationManagerLibrary;
+if (typeof window.Shared === "undefined") window.Shared = {}; if (typeof window.Shared.TranslationManager === "undefined") window.Shared.TranslationManager = TranslationManagerLibrary;
