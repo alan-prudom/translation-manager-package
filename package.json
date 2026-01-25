@@ -1,6 +1,6 @@
 {
     "name": "@shared/translation-manager",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Portable background translation system for Google Apps Script SPAs",
     "main": "dist/TranslationManager.js",
     "types": "src/Types.ts",

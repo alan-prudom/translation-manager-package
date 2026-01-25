@@ -5,6 +5,17 @@ All notable changes to the Translation Manager package will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-01-23
+
+### Added
+- **Headless Mode**: Support for reactive frameworks (Vue.js, React) with manual translation triggering.
+- Vue SPA Demo: Complete working example with full UI internationalization.
+- Bundled library distribution for standalone usage.
+
+### Fixed
+- Vue demo TranslationManager integration with proper event handling.
+- Deserialization issues in Vue.js SPAs.
+
 ## [1.0.0] - 2026-01-18
 
 ### Added
